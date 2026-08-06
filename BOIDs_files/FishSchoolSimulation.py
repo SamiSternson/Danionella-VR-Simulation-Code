@@ -77,7 +77,7 @@ class VirtualFishTank(ShowBase):
         terrain_texture = self.loader.load_texture(r"..\terrain\aerial_grass_rock_diff_1k.jpg")
         self.terrain.set_texture(terrain_texture, 1)
         # Fish variables
-        self.num_fish = 8
+        self.num_fish = 4
         self.fish_list = []
         self.fish_state = {}  # Dictionary to store the state of each fish
         # Pause variable
@@ -422,12 +422,12 @@ class VirtualFishTank(ShowBase):
                 "boundary_rel_m": 1.86,
                 "righting_s": 0.056,
                 "righting_m": 0.189,
-                "avoidance_s": 0, #0.5,
+                "avoidance_s": 0.5,
                 "avoidance_m": 1.19,
-                "cohesion_s":  0,#0.006, # 0.006 #strong schooling 0.1
+                "cohesion_s":  0.1,#0.006, # 0.006 #strong schooling 0.1
                 "cohesion_m": 0.150,
-                "alignment_s": 0.083, #  0.083 #strong schooling 0.4
-                "alignment_m": 0.187, # 0.187 #strong schooling 0.5
+                "alignment_s": 0.4, #  0.083 #strong schooling 0.4
+                "alignment_m": 0.5, # 0.187 #strong schooling 0.5
 
                 # Boundary force #
                 "boundary_radius":fish_width * 5,
@@ -436,13 +436,13 @@ class VirtualFishTank(ShowBase):
                 "righting_threshold": 0.15,
                 
                 # Avoidance #
-                "avoidance_radius": self.config.fish_size * self.mm_to_unit_scale,
+                "avoidance_radius": self.config.fish_size * self.mm_to_unit_scale*10,
 
                 # Cohesion # 
-                "cohesion_radius": self.config.InteractionLimit * self.mm_to_unit_scale,
+                "cohesion_radius": self.config.InteractionLimit * self.mm_to_unit_scale*10,
 
                 # Alignment # 
-                "alignment_radius":self.config.InteractionLimit * self.mm_to_unit_scale,
+                "alignment_radius":self.config.InteractionLimit * self.mm_to_unit_scale*10,
             }
             self.fish_list.append(fish)
         # Calculate initial burst strength for each fish based on target velocity
@@ -540,7 +540,7 @@ class VirtualFishTank(ShowBase):
         
         return force,eminent_collision>0
     
-    def avoidance_force(self, fish, neighbor_radius=10, strength=100):
+    def avoidance_force(self, fish, neighbor_radius=100, strength=100):
         """
         Calculate a force to avoid nearby fish (separation), consistent with boid flocking.
         neighbor_radius: distance within which other fish influence this fish
@@ -769,10 +769,10 @@ class VirtualFishTank(ShowBase):
         ## APPLY FORCES HERE 
         if not eminent_collision:
             target_force = LVector3(0, 0, 0) #self.path_follow_force(fish, state, burst_force, drag_force,deltaT)
-            avoidance_force = self.avoidance_force(fish, neighbor_radius=state['avoidance_radius'], strength=state['avoidance_strength'])
+            avoidance_force, _ = self.avoidance_force(fish, neighbor_radius=state['avoidance_radius'], strength=state['avoidance_strength'])
             cohesion_force = self.cohesion_force(fish, neighbor_radius= state['cohesion_radius'], strength = state['cohesion_strength'])
             alignment_force = self.alignment_force(fish, neighbor_radius= state['alignment_radius'], strength = state['alignment_strength'])
-            boundary_force = self.boundary_force(fish, state, threshold = state["boundary_radius"],strength=state['boundary_strength'])
+            boundary_force, _ = self.boundary_force(fish, state, threshold=state["boundary_radius"], strength=state['boundary_strength'])
             righting_force = self.righting_force(fish,righting_threshold= state['righting_threshold'], strength=state['righting_strength'])
             social_forces = target_force + cohesion_force + alignment_force + righting_force
             burst_force = self.burst_force(fish,social_forces,deltaT)
@@ -785,7 +785,7 @@ class VirtualFishTank(ShowBase):
                 social_forces = LVector3(0,0,0)
             burst_force = (social_forces.normalized()*0.2 + burst_force.normalized()*0.8).normalized() * state['burst_strength']
             thrust += burst_force + righting_force
-            #print(f'Total thrust {np.round(thrust)}. TF {np.round(target_force)}. AF {np.round(avoidance_force)}. BF {np.round(boundary_force)}. RF {np.round(righting_force)}. CF {np.round(cohesion_force)}. AF {np.round(alignment_force)}')
+            # print(f'Total thrust {np.round(thrust)}. TF {np.round(target_force)}. AF {np.round(avoidance_force)}. BF {np.round(boundary_force)}. RF {np.round(righting_force)}. CF {np.round(cohesion_force)}. AF {np.round(alignment_force)}')
             # Start burst timer
             if state["burst_timer"] == 0:
                 fish.play("swim")
@@ -992,7 +992,7 @@ class VirtualFishTank(ShowBase):
     def check_time(self, task):
         if self.start_timer.is_set():
             current_time = globalClock.get_frame_time() - self.fish_show_time
-            print('Current time: ',current_time)
+            #print('Current time: ',current_time)
             if current_time >= self.Delay and self.trial_count == 0 and self.start_saving.is_set() is False:
                 self.start_saving.set()
                 if self.config.SaveMode:

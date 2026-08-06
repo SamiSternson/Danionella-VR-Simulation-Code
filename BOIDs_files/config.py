@@ -33,9 +33,9 @@ InteractionLimitRealFish = 280 # Distance threshold virtual fish engagement with
 RealFishSchoolStrength = 0  # Relative strength of schooling forces to real fish versus virtual fish
 ShowVirtualTankOutline = False
 BURST_DIR = 0.01#0.1
-GLIDE_DIR = 0.3#1-BURST_DIR
+GLIDE_DIR = 0.4#1-BURST_DIR
 TARGET_VELOC = 5.5
-FRICTION_COEFF = 0.4
+FRICTION_COEFF = 0.5
 
 # ArenaSize 
 ArenaSize = [[35.75], [-3918.75], [572.2237324683415], [[129, 693]], [np.float64(117.0), np.float64(264.0)], [np.float64(125.0), np.float64(550.0)], [113, 121], [[113, 121], [686, 127], [672, 671], [129, 693]]]
