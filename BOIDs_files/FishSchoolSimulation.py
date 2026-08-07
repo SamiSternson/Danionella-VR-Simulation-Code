@@ -8,7 +8,12 @@ import math
 import numpy as np
 import random
 import datetime as dt
- 
+
+def inverse_power_distribution_index(n, p):
+    probs = [(1 / i**p) for i in range(1, n + 1)]
+    total = sum(probs)
+    new_probs = [prob / total for prob in probs]
+    return np.random.choice([i for i in range(n)], p=new_probs)
 
 
 class VirtualFishTank(ShowBase):
@@ -480,6 +485,13 @@ class VirtualFishTank(ShowBase):
         center_rft = (self.tank_vertices_rft[0] + self.tank_vertices_rft[6]) / 2
         self.real_fish.set_pos(center_rft)
 
+        # Ensure real_fish_velocity always exists, even when live tracking (update_real_fish)
+        # isn't running. Without this, alignment_force can crash with AttributeError the
+        # moment it randomly picks the real fish as the alignment neighbor. Only set a
+        # default if update_real_fish hasn't already populated a live value.
+        if not hasattr(self, 'real_fish_velocity'):
+            self.real_fish_velocity = LVector3(0, 0, 0)
+
         # Once done initing fish, start the timer 
         self.fish_show_time=globalClock.get_frame_time()
         if self.trial_count==0:
@@ -575,7 +587,7 @@ class VirtualFishTank(ShowBase):
             avoidance=avoidance.normalized()*state['max_avoidance_force']
         return avoidance,eminent_collision
     
-    def cohesion_force(self, fish, neighbor_radius=50, strength=5):
+    def cohesion_force(self, fish, neighbor_radius=100, strength=5):
         """
         Calculate a cohesion force to move the fish toward the center of nearby fish.
         neighbor_radius: distance within which neighbors influence this fish
@@ -583,35 +595,16 @@ class VirtualFishTank(ShowBase):
         """
         cohesion = LVector3(0, 0, 0)
         fish_pos = fish.get_pos()
-        neighbor_count = 0
-        center_of_mass_virtual = LVector3(0, 0, 0)
-        center_of_mass_real = LVector3(0, 0, 0)
         state=self.fish_state[fish]
-        for other in self.fish_list:
-            if other == fish:
-                continue
-            other_pos = other.get_pos()
-            offset = other_pos - fish_pos
-            distance = offset.length()
-            if distance < neighbor_radius:
-                center_of_mass_virtual += other_pos
-                neighbor_count += 1
         
-        # Check real fish 
-        other_pos = self.real_fish.get_pos()
-        offset = other_pos - fish_pos
-        distance = offset.length()
-        if distance < self.config.InteractionLimitRealFish * self.mm_to_unit_scale:
-            center_of_mass_real += other_pos
-            neighbor_count += 1
+        neighbors=[(other, (other.get_pos()-fish_pos).length()) for other in self.fish_list if other != fish and (other.get_pos()-fish_pos).length() < neighbor_radius]
+        neighbors.append((self.real_fish, (self.real_fish.get_pos()-fish_pos).length()))
+        neighbors.sort(key=lambda x: x[1])  # Sort by distance
+        random_index=inverse_power_distribution_index(len(neighbors), p=1.5)  # Get a random index based on inverse power distribution
+        if len(neighbors) > 0:
+            target_neighbor, _ = neighbors[random_index]
 
-        if neighbor_count > 0:
-            center_of_mass_virtual /= neighbor_count
-            # Cohesion force points toward the center of mass
-            cohesion = (center_of_mass_virtual - fish_pos).normalized() * strength
-            # Add real fish influence scaled by strength
-            if center_of_mass_real.length() > 0:
-                cohesion += (center_of_mass_real - fish_pos).normalized() * cohesion.length() * self.config.RealFishSchoolStrength
+            cohesion = (target_neighbor.get_pos() - fish_pos).normalized() * strength
 
         # Threshold if needed 
         if cohesion.length()>state['max_cohesion_force']:
@@ -656,7 +649,7 @@ class VirtualFishTank(ShowBase):
         
         return path_following_force
     
-    def alignment_force(self, fish, neighbor_radius=50, strength=1.0):
+    def alignment_force(self, fish, neighbor_radius=100, strength=1.0):
         """
         Calculate an alignment force to align the fish's velocity with nearby neighbors.
         neighbor_radius: distance within which neighbors influence this fish
@@ -664,32 +657,19 @@ class VirtualFishTank(ShowBase):
         """
         alignment = LVector3(0, 0, 0)
         fish_pos = fish.get_pos()
-        neighbor_count = 0
-        avg_velocity = LVector3(0, 0, 0)
         state = self.fish_state[fish]
-        for other in self.fish_list:
-            if other == fish:
-                continue
-            other_pos = other.get_pos()
-            offset = other_pos - fish_pos
-            distance = offset.length()
-            if distance < neighbor_radius:
-                other_state = self.fish_state[other]
-                avg_velocity += other_state["velocity"].normalized()
-                neighbor_count += 1
-        
-        # Check real fish
-        other_pos = self.real_fish.get_pos()
-        offset = other_pos - fish_pos
-        distance = offset.length()
-        if distance < neighbor_radius:
-            if hasattr(self, 'real_fish_velocity'):
-                avg_velocity += self.real_fish_velocity.normalized() * avg_velocity.length() * self.config.RealFishSchoolStrength
-                neighbor_count += 1
-        if neighbor_count > 0:
-            avg_velocity /= neighbor_count
-            # Alignment force: steer toward average neighbor velocity
-            alignment = (avg_velocity - state["velocity"]).normalized() * strength
+        neighbors=[(other, (other.get_pos()-fish_pos).length()) for other in self.fish_list if other != fish and (other.get_pos()-fish_pos).length() < neighbor_radius]
+        neighbors.append((self.real_fish, (self.real_fish.get_pos()-fish_pos).length()))
+        neighbors.sort(key=lambda x: x[1])  # Sort by distance
+        random_index=inverse_power_distribution_index(len(neighbors), p=1.5)  # Get a random index based on inverse power distribution
+        if len(neighbors) > 0:
+            neighbor, _ = neighbors[random_index]
+            if neighbor != self.real_fish:
+                neighbor_state = self.fish_state[neighbor]
+
+                alignment = (neighbor_state["velocity"] - state["velocity"]).normalized() * strength
+            else:
+                alignment=(self.real_fish_velocity - state["velocity"]).normalized() * strength
             
             # Threshold if needed 
             if alignment.length()>state['max_alignment_force']:
