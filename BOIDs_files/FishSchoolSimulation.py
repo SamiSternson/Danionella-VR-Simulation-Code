@@ -109,7 +109,7 @@ class VirtualFishTank(ShowBase):
             self.FirstSave = True
             self.task_mgr.add(self.save_metadata_once, "SaveMetadataOnceTask")
         if self.config.TestMode:
-            self.camera_offset(FixedCameraAngle=0,cam_height_offset=100)
+            self.camera_offset(FixedCameraAngle=0,cam_height_offset=0)
             print('Camera offset to fixed angle for testing')
             #self.taskMgr.add(self.camera_orbit, "SpinCameraTask")
 
@@ -429,9 +429,9 @@ class VirtualFishTank(ShowBase):
                 "righting_m": 0.189,
                 "avoidance_s": 0.5,
                 "avoidance_m": 1.19,
-                "cohesion_s":  0.1,#0.006, # 0.006 #strong schooling 0.1
+                "cohesion_s":  0.05,#0.006, # 0.006 #strong schooling 0.1
                 "cohesion_m": 0.150,
-                "alignment_s": 0.4, #  0.083 #strong schooling 0.4
+                "alignment_s": 0.2, #  0.083 #strong schooling 0.4
                 "alignment_m": 0.5, # 0.187 #strong schooling 0.5
 
                 # Boundary force #
@@ -867,6 +867,7 @@ class VirtualFishTank(ShowBase):
                 
                 state = self.fish_state[fish]
                 v = state["velocity"]
+                v[2]=max(-0.5, min(0.5,v[2])) # Limit vertical velocity to prevent fish from going out of bounds
                 m = state["mass"]
                 Cd = state["friction_coeff"]
                 speed = v.length()
@@ -1221,16 +1222,24 @@ class VirtualFishTank(ShowBase):
         return Task.cont
     def camera_offset(self,FixedCameraAngle=45,cam_height_offset=0):
         first_cam_pos = self.camera.get_pos() 
-        # Look at center of tank 
-        min_point = self.tank_bounding_box_left.get_min()
-        max_point = self.tank_bounding_box_left.get_max()
+        # Look at the center of whichever tank side actually has the virtual fish in it
+        # (previously this always used tank_bounding_box_left, regardless of stimulus_side)
+        if self.config.stimulus_side == 'left':
+            bounding_box = self.tank_bounding_box_left
+        else:
+            bounding_box = self.tank_bounding_box_right
+        min_point = bounding_box.get_min()
+        max_point = bounding_box.get_max()
         self.center = (min_point + max_point) * 0.5
         self.Distance = (first_cam_pos - self.center).length()
         angleDegrees = FixedCameraAngle
         angleRadians = angleDegrees * (math.pi / 180.0)
         Radius = self.Distance
-        self.camera.setPos(Radius*math.sin(angleRadians), -Radius * math.cos(angleRadians), self.config.CamHeight+cam_height_offset)
-        self.camera.look_at(self.center-18)
+        # Anchor camera height to the tank's own height (plus a small optional offset)
+        # rather than CamHeight+cam_height_offset, which previously let a large
+        # cam_height_offset (100) put the camera almost directly above the tank.
+        self.camera.setPos(Radius*math.sin(angleRadians), -Radius * math.cos(angleRadians), self.center.z+cam_height_offset)
+        self.camera.look_at(self.center)
     
     ### Saving functions ###
     # def save_metadata_once(self,task):

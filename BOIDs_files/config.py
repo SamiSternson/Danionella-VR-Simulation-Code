@@ -17,7 +17,7 @@ MonitorLength = 300 # Monitor length in mm (used for scaling if there is overhan
 
 # Panda3D parameters
 CamDist=50 #distance of virtural camera to tank (game units) 
-CamHeight=100 #height of virtual camera and tank (game units)  
+CamHeight=0 #height of virtual camera and tank (game units)  
 FishScale=.5 #scale to apply to our firtual fish (note this is applied to all dimensions of the fish model, so it is not a linear scaling of length)
 BackgroundColor=[0.94,1,1,1] #Background color of the game window (RGBA)
 Fishalpha=1 #Transparency of the virtual fish (0=transparent, 1=opaque)
