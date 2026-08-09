@@ -695,7 +695,7 @@ class VirtualFishTank(ShowBase):
                     if neighbor_state["fish_paused"]:
                         paused_neighbors += 1
             rand=np.random.rand()
-            if rand<0.1*(math.log(paused_neighbors+1+10**-10)+1) and dist_to_nearest_neighbor<neighbor_radius:
+            if rand<0.1*(math.log(paused_neighbors+1+10**-10)+1) and dist_to_nearest_neighbor<neighbor_radius and (time.time()-state["start_time"])>5.0:
                 state = self.fish_state[fish]
                 state["fish_paused"] = True
                 state["pause_timer"] = 0
@@ -706,7 +706,6 @@ class VirtualFishTank(ShowBase):
                 print(state["pause_timer"])
                 state["fish_paused"] = False
                 state["pause_timer"] = 0
-                state["start_time"] = 0
         
     def righting_force(self, fish, righting_threshold = 0.6, strength=5.0):
         """Apply righting force to keep fish level in the water column."""
@@ -790,6 +789,7 @@ class VirtualFishTank(ShowBase):
             burst_force = self.burst_force(fish,social_forces,deltaT)
         if state["fish_paused"]:
             thrust = LVector3(0, 0, 0)
+            state["velocity"] = LVector3(0, 0, 0)
             fish.stop('swim')
             fish.pose("swim",0)
             self.fish_pause(fish, neighbor_radius=state['avoidance_radius'])
