@@ -110,9 +110,11 @@ class VirtualFishTank(ShowBase):
             self.FirstSave = True
             self.task_mgr.add(self.save_metadata_once, "SaveMetadataOnceTask")
         if self.config.TestMode:
-            self.camera_offset(FixedCameraAngle=0,cam_height_offset=0)
+            self.camera_offset(FixedCameraAngle=0,cam_height_offset=100)
             print('Camera offset to fixed angle for testing')
             #self.taskMgr.add(self.camera_orbit, "SpinCameraTask")
+        else:
+            self.camera_offset(FixedCameraAngle=0,cam_height_offset=0)
 
     def get_tank_coordinates(self, sanity_check=False, relative_depth=False,tank_height_percent=30,draw_normals=False):
         """
@@ -685,6 +687,7 @@ class VirtualFishTank(ShowBase):
         neighbors=[(other, (other.get_pos()-fish_pos).length()) for other in self.fish_list if other != fish and (other.get_pos()-fish_pos).length() < neighbor_radius]
         neighbors.append((self.real_fish, (self.real_fish.get_pos()-fish_pos).length()))
         neighbors.sort(key=lambda x: x[1])  # Sort by distance
+        close_neighbors=[neighbor for neighbor, dist in neighbors if dist < neighbor_radius/3]
         dist_to_nearest_neighbor = neighbors[0][1] if neighbors else float('inf')
         state = self.fish_state[fish]
         if not state["fish_paused"]:
@@ -695,14 +698,14 @@ class VirtualFishTank(ShowBase):
                     if neighbor_state["fish_paused"]:
                         paused_neighbors += 1
             rand=np.random.rand()
-            if rand<0.1*(math.log(paused_neighbors+1+10**-10)+1) and dist_to_nearest_neighbor<neighbor_radius and (time.time()-state["start_time"])>5.0:
+            if rand<0.1*(math.log(paused_neighbors+1+10**-10)+1)*(math.log(len(neighbors)+1+10**-10)+1) and dist_to_nearest_neighbor<neighbor_radius and (time.time()-state["start_time"])>5.0:
                 state = self.fish_state[fish]
                 state["fish_paused"] = True
                 state["pause_timer"] = 0
                 state["start_time"] = time.time()
         else:
             state["pause_timer"] = time.time()-state["start_time"]
-            if state["pause_timer"] > random.random()*state["pause_timer"]*50 or state["pause_timer"] > 3 or dist_to_nearest_neighbor>neighbor_radius:
+            if state["pause_timer"] > random.random()*state["pause_timer"]*50 or state["pause_timer"] > 3 or dist_to_nearest_neighbor>neighbor_radius/1.5:
                 print(state["pause_timer"])
                 state["fish_paused"] = False
                 state["pause_timer"] = 0
