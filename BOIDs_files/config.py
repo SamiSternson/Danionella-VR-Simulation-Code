@@ -11,7 +11,7 @@ Delay=0 # Habituation time (only relevant for real fish tracking experiments)
 OffTime=1 # Time fish are hidden (s)
 OnTime=300 # Time fish are shown (s)
 NumTrials=3 # Number of trials to run
-TestMode = True # If True, runs in test mode with different cam perspective etc. and no saving
+TestMode = False # If True, runs in test mode with different cam perspective etc. and no saving
 SaveMode = False # If True, saves fish positions to a csv file
 MonitorLength = 300 # Monitor length in mm (used for scaling if there is overhang)
 
