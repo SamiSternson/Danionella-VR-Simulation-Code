@@ -34,7 +34,7 @@ RealFishSchoolStrength = 0  # Relative strength of schooling forces to real fish
 vz_lim=0.5 #Limit on vertical velocity of virtual fish (game units)
 ShowVirtualTankOutline = False
 BURST_DIR = 0.01#0.1
-GLIDE_DIR = 0.4#1-BURST_DIR
+GLIDE_DIR = 0.8#1-BURST_DIR
 TARGET_VELOC = 5.5
 FRICTION_COEFF = 0.5
 
