@@ -8,7 +8,6 @@ import math
 import numpy as np
 import random
 import datetime as dt
-import time
 
 def inverse_power_distribution_index(n, p):
     probs = [(1 / i**p) for i in range(1, n + 1)]
@@ -83,7 +82,7 @@ class VirtualFishTank(ShowBase):
         terrain_texture = self.loader.load_texture(r"..\terrain\aerial_grass_rock_diff_1k.jpg")
         self.terrain.set_texture(terrain_texture, 1)
         # Fish variables
-        self.num_fish = 5
+        self.num_fish = 4
         self.fish_list = []
         self.fish_state = {}  # Dictionary to store the state of each fish
         # Pause variable
@@ -413,12 +412,13 @@ class VirtualFishTank(ShowBase):
                 "Glide": False,
                 "burst_timer":0,
                 "burst_duration": self.config.BURST_DIR,#self.get_burst_duration(),# np.random.lognormal(mean=0.01, sigma=0.01), # np.abs(random.gauss(0,0.05)) <- Deep water , # np.random.lognormal(mean=0.12, sigma=0.5) # Palka model match
+                "burst_dir_bins":self.config.BURST_BINS,
+                "burst_dir_frequencies":self.config.BURST_FREQUENCIES,
                 "glide_timer":0,
-                "glide_duration": self.config.GLIDE_DIR,#self.get_glide_duration(), # np.abs(random.gauss(.35,0.25)) <- Deep water   # np.abs(random.gauss(0.17, 0.45)) 
-                "fish_paused":False,
-                "pause_timer":0,
-                "start_time":0,
-                #Palka model match
+                "glide_duration": self.config.GLIDE_DIR,#self.get_glide_duration(), # np.abs(random.gauss(.35,0.25)) <- Deep water   # np.abs(random.gauss(0.17, 0.45)) #Palka model match
+                "glide_dir_bins":self.config.GLIDE_BINS,
+                "glide_dir_frequencies":self.config.GLIDE_FREQUENCIES,
+                
                 "mass":1,
                 "direction":1,
                 "burst_counter": 0 ,
@@ -440,7 +440,7 @@ class VirtualFishTank(ShowBase):
                 "cohesion_m": 0.150,
                 "alignment_s": 0.2, #  0.083 #strong schooling 0.4
                 "alignment_m": 0.5, # 0.187 #strong schooling 0.5
-                "random_index":0,#Random index for deciding which fish to be attracted to and align with
+
                 # Boundary force #
                 "boundary_radius":fish_width * 5,
 
@@ -448,7 +448,7 @@ class VirtualFishTank(ShowBase):
                 "righting_threshold": 0.15,
                 
                 # Avoidance #
-                "avoidance_radius": self.config.fish_size * self.mm_to_unit_scale*10,
+                "avoidance_radius": self.config.fish_size * self.mm_to_unit_scale*5,
 
                 # Cohesion # 
                 "cohesion_radius": self.config.InteractionLimit * self.mm_to_unit_scale*10,
@@ -607,8 +607,7 @@ class VirtualFishTank(ShowBase):
         neighbors=[(other, (other.get_pos()-fish_pos).length()) for other in self.fish_list if other != fish and (other.get_pos()-fish_pos).length() < neighbor_radius]
         neighbors.append((self.real_fish, (self.real_fish.get_pos()-fish_pos).length()))
         neighbors.sort(key=lambda x: x[1])  # Sort by distance
-        random_index=inverse_power_distribution_index(len(neighbors), p=1.5)# Get a random index based on inverse power distribution
-        state['random_index']=random_index
+        random_index=inverse_power_distribution_index(len(neighbors), p=1.5)  # Get a random index based on inverse power distribution
         if len(neighbors) > 0:
             target_neighbor, _ = neighbors[random_index]
 
@@ -664,52 +663,25 @@ class VirtualFishTank(ShowBase):
         strength: scaling factor for alignment
         """
         alignment = LVector3(0, 0, 0)
-        state = self.fish_state[fish]
         fish_pos = fish.get_pos()
+        state = self.fish_state[fish]
         neighbors=[(other, (other.get_pos()-fish_pos).length()) for other in self.fish_list if other != fish and (other.get_pos()-fish_pos).length() < neighbor_radius]
         neighbors.append((self.real_fish, (self.real_fish.get_pos()-fish_pos).length()))
         neighbors.sort(key=lambda x: x[1])  # Sort by distance
+        random_index=inverse_power_distribution_index(len(neighbors), p=1.5)  # Get a random index based on inverse power distribution
         if len(neighbors) > 0:
-            neighbor, _ = neighbors[state['random_index']]
+            neighbor, _ = neighbors[random_index]
             if neighbor != self.real_fish:
                 neighbor_state = self.fish_state[neighbor]
 
                 alignment = (neighbor_state["velocity"] - state["velocity"]).normalized() * strength
             else:
                 alignment=(self.real_fish_velocity - state["velocity"]).normalized() * strength
-            
             # Threshold if needed 
             if alignment.length()>state['max_alignment_force']:
                 alignment=alignment.normalized()*state['max_alignment_force']
         return alignment
-    def fish_pause(self, fish, neighbor_radius=100):
-        fish_pos = fish.get_pos()
-        neighbors=[(other, (other.get_pos()-fish_pos).length()) for other in self.fish_list if other != fish and (other.get_pos()-fish_pos).length() < neighbor_radius]
-        neighbors.append((self.real_fish, (self.real_fish.get_pos()-fish_pos).length()))
-        neighbors.sort(key=lambda x: x[1])  # Sort by distance
-        close_neighbors=[neighbor for neighbor, dist in neighbors if dist < neighbor_radius/3]
-        dist_to_nearest_neighbor = neighbors[0][1] if neighbors else float('inf')
-        state = self.fish_state[fish]
-        if not state["fish_paused"]:
-            paused_neighbors =0
-            for neighbor, _ in neighbors:
-                if neighbor != self.real_fish:
-                    neighbor_state = self.fish_state[neighbor]
-                    if neighbor_state["fish_paused"]:
-                        paused_neighbors += 1
-            rand=np.random.rand()
-            if rand<0.1*(math.log(paused_neighbors+1+10**-10)+1)*(math.log(len(neighbors)+1+10**-10)+1) and dist_to_nearest_neighbor<neighbor_radius and (time.time()-state["start_time"])>5.0:
-                state = self.fish_state[fish]
-                state["fish_paused"] = True
-                state["pause_timer"] = 0
-                state["start_time"] = time.time()
-        else:
-            state["pause_timer"] = time.time()-state["start_time"]
-            if state["pause_timer"] > random.random()*state["pause_timer"]*50 or state["pause_timer"] > 3 or dist_to_nearest_neighbor>neighbor_radius/1.5:
-                print(state["pause_timer"])
-                state["fish_paused"] = False
-                state["pause_timer"] = 0
-        
+    
     def righting_force(self, fish, righting_threshold = 0.6, strength=5.0):
         """Apply righting force to keep fish level in the water column."""
         damping=0.1
@@ -790,44 +762,33 @@ class VirtualFishTank(ShowBase):
             righting_force = self.righting_force(fish,righting_threshold= state['righting_threshold'], strength=state['righting_strength'])
             social_forces = target_force + cohesion_force + alignment_force + righting_force
             burst_force = self.burst_force(fish,social_forces,deltaT)
-        if state["fish_paused"]:
-            thrust = LVector3(0, 0, 0)
-            state["velocity"] = LVector3(0, 0, 0)
-            fish.stop('swim')
-            fish.pose("swim",0)
-            self.fish_pause(fish, neighbor_radius=state['avoidance_radius'])
-        # BURST phase
-        elif not state["Glide"]:
-            self.fish_pause(fish, neighbor_radius=state['avoidance_radius'])
-            if state["fish_paused"]:
-                thrust = LVector3(0, 0, 0)
-                fish.stop('swim')
-                fish.pose("swim",0)
-            else:
-                if state['alignment_strength']>0:
-                    social_forces = target_force + cohesion_force + alignment_force 
-                else:
-                    social_forces = LVector3(0,0,0)
-                burst_force = (social_forces.normalized()*0.2 + burst_force.normalized()*0.8).normalized() * state['burst_strength']
-                thrust += burst_force + righting_force
-                # print(f'Total thrust {np.round(thrust)}. TF {np.round(target_force)}. AF {np.round(avoidance_force)}. BF {np.round(boundary_force)}. RF {np.round(righting_force)}. CF {np.round(cohesion_force)}. AF {np.round(alignment_force)}')
-                # Start burst timer
-                if state["burst_timer"] == 0:
-                    fish.play("swim")
-                    fish.setPlayRate(min(10, thrust.length()), "swim")
-                    state['StartBurstTime'] = globalClock.get_frame_time()
-                    state["burst_timer"] = globalClock.get_frame_time()
 
-                elapsed_time = globalClock.get_frame_time() - state['StartBurstTime']
-                # Switch to glide when burst timer exceeded
-                if elapsed_time >= state["burst_duration"]:
-                    state["Glide"] = True
-                    state["burst_timer"] = 0
-                    state["glide_timer"] = 0
-                    state["EndBurstTime"] = globalClock.get_frame_time()
-                    state["TrueBurstDuration"] = elapsed_time
-                    # if state['TrueBurstDuration']<0.9*self.BURST_DIR-deltaT or state['TrueBurstDuration']>1.1*self.BURST_DIR+deltaT:
-                    #     print(f"True burst duration {state['TrueBurstDuration']} is outside the expected range {0.9*self.BURST_DIR} to {1.1*self.BURST_DIR}")
+        # BURST phase
+        if not state["Glide"]:
+            if state['alignment_strength']>0:
+                social_forces = target_force + cohesion_force + alignment_force 
+            else:
+                social_forces = LVector3(0,0,0)
+            burst_force = (social_forces.normalized()*0.2 + burst_force.normalized()*0.8).normalized() * state['burst_strength']
+            thrust += burst_force + righting_force
+            # print(f'Total thrust {np.round(thrust)}. TF {np.round(target_force)}. AF {np.round(avoidance_force)}. BF {np.round(boundary_force)}. RF {np.round(righting_force)}. CF {np.round(cohesion_force)}. AF {np.round(alignment_force)}')
+            # Start burst timer
+            if state["burst_timer"] == 0:
+                fish.play("swim")
+                fish.setPlayRate(min(10, thrust.length()), "swim")
+                state['StartBurstTime'] = globalClock.get_frame_time()
+                state["burst_timer"] = globalClock.get_frame_time()
+
+            elapsed_time = globalClock.get_frame_time() - state['StartBurstTime']
+            # Switch to glide when burst timer exceeded
+            if elapsed_time >= state["burst_duration"]:
+                state["Glide"] = True
+                state["burst_timer"] = 0
+                state["glide_timer"] = 0
+                state["EndBurstTime"] = globalClock.get_frame_time()
+                state["TrueBurstDuration"] = elapsed_time
+                # if state['TrueBurstDuration']<0.9*self.BURST_DIR-deltaT or state['TrueBurstDuration']>1.1*self.BURST_DIR+deltaT:
+                #     print(f"True burst duration {state['TrueBurstDuration']} is outside the expected range {0.9*self.BURST_DIR} to {1.1*self.BURST_DIR}")
 
         # GLIDE phase
         else:
@@ -848,9 +809,14 @@ class VirtualFishTank(ShowBase):
             #thrust += righting_force
             # Stop gliding when glide timer exceeded
             if elapsed_glide_time >= state["glide_duration"]:
+                rng = np.random.default_rng()
+                glide_dir=rng.choice(state["glide_dir_bins"], 1, p=state["glide_dir_frequencies"])[0]
+                burst_dir=rng.choice(state["burst_dir_bins"], 1, p=state["burst_dir_frequencies"])[0]
+                if glide_dir>0.5:
+                    print(glide_dir)
                 state["Glide"] = False
-                state['glide_duration'] = self.GLIDE_DIR#+np.random.uniform(-self.GLIDE_DIR*.01,self.GLIDE_DIR*.01)
-                state['burst_duration'] = self.BURST_DIR#+np.random.uniform(-self.BURST_DIR*.01,self.BURST_DIR*.01)
+                state['glide_duration'] = glide_dir#+np.random.uniform(-self.GLIDE_DIR*.01,self.GLIDE_DIR*.01)
+                state['burst_duration'] = 0.01#+np.random.uniform(-self.BURST_DIR*.01,self.BURST_DIR*.01)
                 state["EndGlideTime"] = globalClock.get_frame_time()
                 state["TrueGlideDuration"] = state["EndGlideTime"] - state["StartGlideTime"]
                 
@@ -912,7 +878,7 @@ class VirtualFishTank(ShowBase):
                 
                 state = self.fish_state[fish]
                 v = state["velocity"]
-                v[2]=max(-self.config.vz_lim, min(self.config.vz_lim,v[2])) # Limit vertical velocity to prevent fish from going out of bounds
+                v[2]=max(-0.5, min(0.5,v[2])) # Limit vertical velocity to prevent fish from going out of bounds
                 m = state["mass"]
                 Cd = state["friction_coeff"]
                 speed = v.length()
